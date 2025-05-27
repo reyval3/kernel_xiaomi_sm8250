@@ -1,0 +1,56 @@
+name: Build alioth Kernel
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compile and Pack Kernel for Poco F3
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Kernel Source
+      uses: actions/checkout@v3
+      with:
+        submodules: true
+
+    - name: Set up Proton Clang
+      run: |
+        git clone --depth=1 https://github.com/kdrag0n/proton-clang clang
+
+    - name: Prepare Environment
+      run: |
+        echo "Setting environment variables"
+        export ARCH=arm64
+        export SUBARCH=arm64
+        export KBUILD_BUILD_USER=github
+        export KBUILD_BUILD_HOST=actions
+        export CLANG_PATH=$GITHUB_WORKSPACE/clang
+        export PATH=$CLANG_PATH/bin:$PATH
+
+    - name: Make Defconfig
+      run: |
+        make O=out ARCH=arm64 vendor/alioth_defconfig
+
+    - name: Build Kernel
+      run: |
+        make -j$(nproc) O=out ARCH=arm64 \
+          CC=clang \
+          CROSS_COMPILE=clang/bin/aarch64-linux-gnu- \
+          CROSS_COMPILE_COMPAT=clang/bin/arm-linux-gnueabi-
+
+    - name: Clone AnyKernel3
+      run: |
+        git clone https://github.com/osm0sis/AnyKernel3.git
+
+    - name: Prepare Flashable ZIP
+      run: |
+        cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/
+        cd AnyKernel3
+        zip -r9 ../alioth-kernel.zip *
+
+    - name: Upload Flashable ZIP
+      uses: actions/upload-artifact@v3
+      with:
+        name: alioth-kernel-flashable
+        path: alioth-kernel.zip
